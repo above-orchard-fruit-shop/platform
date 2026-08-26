@@ -18,3 +18,13 @@
 - Allow shop administrators to add/edit products and review orders.
 - Design the system to support future growth in the number of users.
 - Improve the security and reliability of the system using Cloud services.
+
+### Project Structure
+
+```
+platform/
+├── backend/          # FastAPI service for the customer-facing storefront (products, orders)
+├── backend-admin/    # FastAPI service for shop admin management (products, orders)
+├── frontend/         # Customer-facing website
+└── frontend-admin/   # Admin dashboard (Next.js)
+```
