@@ -1,6 +1,6 @@
 # backend
 
-FastAPI service for the Above Orchard Fruit Shop platform. Serves the customer-facing storefront (products, orders) backed by AWS via boto3.
+FastAPI service for the Above Orchard Fruit Shop platform. Serves both the customer-facing storefront and shop admin management (products, orders) backed by AWS via boto3, with admin routes gated by role-based auth.
 
 ## Requirements
 

@@ -23,8 +23,7 @@
 
 ```
 platform/
-├── backend/          # FastAPI service for the customer-facing storefront (products, orders)
-├── backend-admin/    # FastAPI service for shop admin management (products, orders)
+├── backend/          # FastAPI service for the storefront and admin management (products, orders)
 ├── frontend/         # Customer-facing website
 └── frontend-admin/   # Admin dashboard (Next.js)
 ```
