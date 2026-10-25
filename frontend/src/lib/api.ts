@@ -1,5 +1,13 @@
 import { SEED_PRODUCTS } from "./mock-data";
-import type { CreateOrderInput, Order, Product } from "./types";
+import { getSession, setSession } from "./session";
+import type {
+  CreateOrderInput,
+  CustomerAccount,
+  CustomerSession,
+  Order,
+  Product,
+  RegisterInput,
+} from "./types";
 
 /**
  * Storefront API client.
@@ -66,17 +74,75 @@ export function getProduct(id: string): Promise<Product> {
   return request<Product>(`/products/${encodeURIComponent(id)}`);
 }
 
+/**
+ * A request that needs the signed-in customer's token. A 401 means the session
+ * expired or was revoked, so the shopper is signed out (pages that need a
+ * session then redirect to /login).
+ */
+async function customerRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const session = getSession();
+  try {
+    return await request<T>(path, {
+      ...init,
+      headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+    });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      setSession(null);
+      throw new ApiError("กรุณาเข้าสู่ระบบอีกครั้ง", 401);
+    }
+    throw err;
+  }
+}
+
+/** Requires a signed-in customer. */
 export function createOrder(input: CreateOrderInput): Promise<Order> {
   if (isMockMode) return mock.createOrder(input);
-  return request<Order>("/orders", {
+  return customerRequest<Order>("/orders", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
+/** The signed-in customer's orders, newest first. */
+export function listMyOrders(): Promise<Order[]> {
+  if (isMockMode) return mock.listMyOrders();
+  return customerRequest<Order[]>("/customers/me/orders");
+}
+
 export function getOrder(id: string): Promise<Order> {
   if (isMockMode) return mock.getOrder(id);
   return request<Order>(`/orders/${encodeURIComponent(id)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Customer accounts
+// ---------------------------------------------------------------------------
+
+export async function registerCustomer(input: RegisterInput): Promise<CustomerSession> {
+  const session = isMockMode
+    ? await mock.register(input)
+    : await request<CustomerSession>("/customers/register", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+  setSession(session);
+  return session;
+}
+
+export async function loginCustomer(email: string, password: string): Promise<CustomerSession> {
+  const session = isMockMode
+    ? await mock.login(email, password)
+    : await request<CustomerSession>("/customers/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+  setSession(session);
+  return session;
+}
+
+export function logoutCustomer() {
+  setSession(null);
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +178,68 @@ function newOrderId(): string {
   return `AO-${stamp}-${rand}`;
 }
 
+// Mock accounts live in this browser only. The password is stored hashed so it
+// never sits in localStorage as plain text, but this is still demo-grade.
+type MockAccount = CustomerAccount & { password_hash: string };
+const MOCK_ACCOUNTS_KEY = "aof-storefront-mock-accounts-v1";
+
+function loadAccounts(): MockAccount[] {
+  try {
+    const raw = window.localStorage.getItem(MOCK_ACCOUNTS_KEY);
+    if (raw) return JSON.parse(raw) as MockAccount[];
+  } catch {
+    // storage unavailable or corrupted: no accounts
+  }
+  return [];
+}
+
+function saveAccounts(accounts: MockAccount[]) {
+  try {
+    window.localStorage.setItem(MOCK_ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch {
+    // ignore quota / private-mode errors
+  }
+}
+
+async function mockHash(email: string, password: string): Promise<string> {
+  const data = new TextEncoder().encode(`${email}:${password}`);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function mockSession({ id, name, email, phone }: MockAccount): CustomerSession {
+  return { access_token: `mock-customer-token:${id}`, customer: { id, name, email, phone } };
+}
+
 const mock = {
+  async register(input: RegisterInput) {
+    await wait(400);
+    const email = input.email.trim().toLowerCase();
+    const accounts = loadAccounts();
+    if (accounts.some((a) => a.email === email)) {
+      throw new ApiError("อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบ", 409);
+    }
+    const account: MockAccount = {
+      id: `c-${crypto.randomUUID().slice(0, 12)}`,
+      name: input.name.trim(),
+      email,
+      phone: input.phone,
+      password_hash: await mockHash(email, input.password),
+    };
+    saveAccounts([...accounts, account]);
+    return mockSession(account);
+  },
+
+  async login(rawEmail: string, password: string) {
+    await wait(400);
+    const email = rawEmail.trim().toLowerCase();
+    const account = loadAccounts().find((a) => a.email === email);
+    if (!account || account.password_hash !== (await mockHash(email, password))) {
+      throw new ApiError("อีเมลหรือรหัสผ่านไม่ถูกต้อง", 401);
+    }
+    return mockSession(account);
+  },
+
   async listProducts() {
     await wait();
     return loadDb().products.filter((p) => p.is_active);
@@ -127,6 +254,8 @@ const mock = {
 
   async createOrder(input: CreateOrderInput) {
     await wait(500);
+    const session = getSession();
+    if (!session) throw new ApiError("กรุณาเข้าสู่ระบบก่อนสั่งซื้อ", 401);
     const db = loadDb();
     if (input.items.length === 0) throw new ApiError("ตะกร้าว่าง", 422);
 
@@ -148,6 +277,7 @@ const mock = {
     for (const { product, quantity } of items) product.stock -= quantity;
     const order: Order = {
       id: newOrderId(),
+      customer_id: session.customer.id,
       customer: input.customer,
       items: items.map(({ product, quantity }) => ({
         product_id: product.id,
@@ -165,6 +295,14 @@ const mock = {
     db.orders.unshift(order);
     saveDb(db);
     return order;
+  },
+
+  async listMyOrders() {
+    await wait(300);
+    const session = getSession();
+    if (!session) throw new ApiError("กรุณาเข้าสู่ระบบอีกครั้ง", 401);
+    // db.orders is kept newest first (createOrder uses unshift).
+    return loadDb().orders.filter((o) => o.customer_id === session.customer.id);
   },
 
   async getOrder(id: string) {

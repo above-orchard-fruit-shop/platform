@@ -10,13 +10,18 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
+import { PageSpinner } from "@/components/AuthCard";
 import FruitImage from "@/components/FruitImage";
 import QuantityStepper from "@/components/QuantityStepper";
 import { useCart } from "@/lib/cart";
 import { formatTHB } from "@/lib/format";
+import { useRequireCustomer } from "@/lib/session";
 
 export default function CartPage() {
+  const session = useRequireCustomer(); // redirects to /login when signed out
   const { items, count, total, setQuantity, remove } = useCart();
+
+  if (!session) return <PageSpinner />;
 
   if (items.length === 0) {
     return (

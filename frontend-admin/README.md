@@ -7,7 +7,7 @@ Shop admin dashboard for Above Orchard Fruit Shop (ร้านผลไม้�
 | Path | What it does |
 |---|---|
 | `/login` | Admin sign-in |
-| `/` | Dashboard: today's sales, pending orders, total sales, low-stock products, latest orders |
+| `/` | Dashboard: today's sales, pending orders, total sales, low-stock products, latest orders (click one to see it and change its status right there) |
 | `/products` | Product table: search, add, edit (price, stock, image, show/hide), delete |
 | `/orders` | Orders by status, search, view details, move status forward or cancel |
 
@@ -41,7 +41,7 @@ In the product form, **อัปโหลดรูป** sends a JPG, PNG or WebP
 ```
 src/
 ├── app/            # routes (see table above)
-├── components/     # AdminShell (auth gate + sidebar), ProductDialog, FruitImage, Toast
+├── components/     # AdminShell (auth gate + sidebar), ProductDialog, OrderDialog, FruitImage, Toast
 └── lib/
     ├── api.ts      # API client + mock implementation
     ├── auth.ts     # admin token store

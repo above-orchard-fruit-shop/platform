@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     products_table: str = "aof-products"
     orders_table: str = "aof-orders"
+    customers_table: str = "aof-customers"
 
     images_bucket: str = "aof-product-images"
     # Public base URL for uploaded images, e.g. a CloudFront domain.
@@ -39,6 +40,8 @@ class Settings(BaseSettings):
     # working after a restart). Set it in production, e.g. from Secrets Manager.
     jwt_secret: SecretStr | None = Field(default=None, min_length=32)
     jwt_expire_minutes: int = 8 * 60
+    # Customers stay signed in longer than admins.
+    customer_token_days: int = 7
 
     @property
     def images_base_url(self) -> str:

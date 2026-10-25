@@ -63,6 +63,7 @@ def store(request: pytest.FixtureRequest, settings: Settings, aws_mock: None) ->
         aws.client("dynamodb", settings),
         products_table=settings.products_table,
         orders_table=settings.orders_table,
+        customers_table=settings.customers_table,
     )
 
 
@@ -83,6 +84,17 @@ def admin(client: TestClient) -> dict[str, str]:
     """Authorization header for an admin."""
     res = client.post("/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
     assert res.status_code == 200, res.text
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
+SHOPPER = {"name": "สมชาย ใจดี", "email": "somchai@example.com", "phone": "0812345678", "password": "fruit-lover-1"}
+
+
+@pytest.fixture
+def customer(client: TestClient) -> dict[str, str]:
+    """Authorization header for a signed-up customer."""
+    res = client.post("/customers/register", json=SHOPPER)
+    assert res.status_code == 201, res.text
     return {"Authorization": f"Bearer {res.json()['access_token']}"}
 
 

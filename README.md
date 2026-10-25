@@ -81,11 +81,13 @@ cd frontend-admin
 npm run dev
 ```
 
-The emulator keeps data in memory: stopping it erases products, orders and uploaded images. Next.js reads `.env.local` only at startup, so restart `npm run dev` after changing it.
+Shoppers browse freely but must sign up (`/register`) or sign in (`/login`) on the storefront before adding to the cart or ordering.
+
+The emulator keeps data in memory: stopping it erases products, orders, customer accounts and uploaded images. Next.js reads `.env.local` only at startup, so restart `npm run dev` after changing it.
 
 ### Frontends only (no backend)
 
-Leave `NEXT_PUBLIC_API_URL` empty in `.env.local` and run just `npm run dev` in each frontend. Both apps then use mock data stored in the browser (admin login: `admin` / `admin1234`). Each app keeps its own copy, so orders placed on the storefront don't show up in the admin dashboard, and image upload is disabled.
+Leave `NEXT_PUBLIC_API_URL` empty in `.env.local` and run just `npm run dev` in each frontend. Both apps then use mock data stored in the browser (admin login: `admin` / `admin1234`; storefront: sign up on `/register`, the account is kept in that browser). Each app keeps its own copy, so orders placed on the storefront don't show up in the admin dashboard, and image upload is disabled.
 
 ### Tests
 

@@ -8,10 +8,19 @@ Customer website for Above Orchard Fruit Shop (ร้านผลไม้เบ
 |---|---|
 | `/` | Product catalogue with search and category filter |
 | `/products/[id]` | Product detail, choose quantity, add to cart |
-| `/cart` | Edit quantities, remove items, order summary |
-| `/checkout` | Delivery details + payment method, places the order |
+| `/login` | Customer sign-in (returns to `?next=` afterwards) |
+| `/register` | Customer sign-up: name, email, phone, password |
+| `/cart` | Edit quantities, remove items, order summary (sign-in required) |
+| `/checkout` | Delivery details + payment method, places the order (sign-in required) |
 | `/orders/[id]` | Order confirmation and status tracking |
-| `/track` | Look up an order by its number |
+| `/track` | Look up an order by its number; signed-in shoppers also see their order history (status, date, items, total) and click a row for the details |
+
+### Customer sign-in
+
+- Anyone can browse products and track an order.
+- **ใส่ตะกร้า** (add to cart), `/cart` and `/checkout` send signed-out shoppers to `/login?next=<page>`, and back to that page after signing in.
+- The top-right corner shows a **เข้าสู่ระบบ** button when signed out, and the cart plus an account menu (name, email, sign out) when signed in. Signing out also empties the cart.
+- The session (`access_token` + customer profile) is kept in `localStorage` under `aof-customer-session-v1` (`src/lib/session.ts`); the backend still checks the token on `POST /orders`.
 
 The cart is kept in `localStorage`, so it survives reloads and stays in sync across tabs.
 
@@ -45,6 +54,7 @@ src/
 └── lib/
     ├── api.ts      # API client + mock implementation
     ├── cart.ts     # cart store (useSyncExternalStore + localStorage)
+    ├── session.ts  # customer sign-in state, login redirects (useAuth, useRequireCustomer)
     ├── types.ts    # Product / Order types shared with the backend contract
     └── format.ts   # THB/date formatting, status labels
 ```

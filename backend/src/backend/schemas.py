@@ -104,6 +104,8 @@ class OrderItem(_Schema):
 
 class Order(_Schema):
     id: str
+    # Account that placed the order (see /customers). `customer` holds the delivery details.
+    customer_id: str | None = None
     customer: Customer
     items: list[OrderItem]
     total: DecimalNumber
@@ -128,6 +130,50 @@ class LoginInput(_Schema):
 class Token(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
+
+
+# --- Customer accounts ------------------------------------------------------
+
+_EMAIL_PATTERN = r"^[^\s@]+@[^\s@]+\.[^\s@]+$"
+
+
+def _normalize_email(v: str) -> str:
+    return v.lower()
+
+
+class CustomerRegister(_Schema):
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(max_length=254, pattern=_EMAIL_PATTERN, examples=["somchai@example.com"])
+    phone: str = Field(pattern=r"^0\d{8,9}$", examples=["0812345678"])
+    password: str = Field(min_length=8, max_length=128)
+
+    _email = field_validator("email", mode="after")(_normalize_email)
+
+
+class CustomerLogin(_Schema):
+    email: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
+
+    _email = field_validator("email", mode="after")(_normalize_email)
+
+
+class CustomerAccount(BaseModel):
+    id: str
+    name: str
+    email: str
+    phone: str
+
+
+class StoredCustomer(CustomerAccount):
+    """Internal record. Never returned by the API: it carries the password hash."""
+
+    password_hash: str
+
+
+class CustomerSession(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    customer: CustomerAccount
 
 
 ImageContentType = Literal["image/jpeg", "image/png", "image/webp"]

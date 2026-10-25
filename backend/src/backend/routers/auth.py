@@ -12,6 +12,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     responses={status.HTTP_401_UNAUTHORIZED: {"description": "Wrong username or password"}},
 )
 async def login(payload: LoginInput, tokens: TokenServiceDep) -> Token:
-    if not tokens.check_credentials(payload.username, payload.password):
+    if not tokens.check_admin_credentials(payload.username, payload.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
-    return Token(access_token=tokens.issue(payload.username))
+    return Token(access_token=tokens.issue_admin(payload.username))

@@ -25,7 +25,8 @@ Product {
 
 Order {
   id: string                // hard-to-guess, e.g. "AO-MH2K3J1-7XQ2P"
-  customer: { name, phone, email?, address }
+  customer_id: string       // account that placed it (see Customer accounts)
+  customer: { name, phone, email?, address }  // delivery details for this order
   items: [{ product_id, name, price, unit, quantity }]  // price/name copied at order time
   total: number
   status: "pending" | "confirmed" | "shipping" | "completed" | "cancelled"
@@ -41,11 +42,17 @@ Order {
 |---|---|---|---|
 | GET | `/products` | – | `Product[]` (only `is_active = true`) |
 | GET | `/products/{id}` | – | `Product` · 404 if missing or inactive |
-| POST | `/orders` | `{ customer, items: [{product_id, quantity}], payment_method, note? }` | `Order` (201) |
+| POST | `/orders` | `{ customer, items: [{product_id, quantity}], payment_method, note? }` | `Order` (201) · **401 without a customer token** |
 | GET | `/orders/{id}` | – | `Order` · 404 if missing |
+
+Browsing products and tracking an order by its id need no login. Placing an
+order does: send `Authorization: Bearer <access_token>` from `/customers/login`
+or `/customers/register`.
 
 `POST /orders` rules the backend must enforce (never trust the client):
 
+- Require a valid **customer** token (an admin token is rejected) and record its
+  account id as `customer_id`.
 - Look up each product's current `price` and compute `total` on the server.
 - Reject with **409** if a product is inactive or `quantity > stock`.
 - Decrease stock atomically (DynamoDB `TransactWriteItems` with a
@@ -53,7 +60,22 @@ Order {
   buy the last item at the same time.
 - Validate phone (`^0\d{8,9}$`), name, and address; respond **422** otherwise.
 
-## Auth
+## Customer accounts
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/customers/register` | `{ name, email, phone, password }` | `{ access_token, customer }` (201) · 409 if the email is taken · 422 if invalid |
+| POST | `/customers/login` | `{ email, password }` | `{ access_token, customer }` · 401 on bad credentials |
+| GET | `/customers/me/orders` | – (customer token) | `Order[]` placed by this account, newest first · 401 without a customer token |
+
+`customer` is `{ id, name, email, phone }`; the password is never returned.
+Emails are trimmed and lower-cased, passwords need at least 8 characters and are
+stored as scrypt hashes. The token is a JWT with role `customer`, valid for 7 days.
+
+The storefront lets anyone browse, but "add to cart", the cart and checkout send
+signed-out shoppers to `/login?next=<page>` first.
+
+## Admin auth
 
 | Method | Path | Body | Returns |
 |---|---|---|---|

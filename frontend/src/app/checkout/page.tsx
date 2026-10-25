@@ -16,10 +16,12 @@ import Typography from "@mui/material/Typography";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { PageSpinner } from "@/components/AuthCard";
 import { createOrder, errorMessage } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatTHB, PAYMENT_LABEL } from "@/lib/format";
-import type { PaymentMethod } from "@/lib/types";
+import { useRequireCustomer } from "@/lib/session";
+import type { CustomerAccount, PaymentMethod } from "@/lib/types";
 
 type Form = {
   name: string;
@@ -31,14 +33,17 @@ type Form = {
 };
 type Errors = Partial<Record<keyof Form, string>>;
 
-const EMPTY_FORM: Form = {
-  name: "",
-  phone: "",
-  email: "",
-  address: "",
-  note: "",
-  payment_method: "cod",
-};
+/** Start from the account's contact details; the shopper can still change them per order. */
+function initialForm(customer: CustomerAccount): Form {
+  return {
+    name: customer.name,
+    phone: customer.phone,
+    email: customer.email,
+    address: "",
+    note: "",
+    payment_method: "cod",
+  };
+}
 
 function validate(f: Form): Errors {
   const e: Errors = {};
@@ -52,9 +57,16 @@ function validate(f: Form): Errors {
 }
 
 export default function CheckoutPage() {
+  const session = useRequireCustomer(); // redirects to /login when signed out
+  if (!session) return <PageSpinner />;
+  // Mounted only once the session is known, so the form can start pre-filled.
+  return <CheckoutForm customer={session.customer} />;
+}
+
+function CheckoutForm({ customer }: { customer: CustomerAccount }) {
   const router = useRouter();
   const { items, total, clear } = useCart();
-  const [form, setForm] = useState<Form>(EMPTY_FORM);
+  const [form, setForm] = useState<Form>(() => initialForm(customer));
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);

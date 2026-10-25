@@ -29,7 +29,7 @@ Point both frontends at the API with `NEXT_PUBLIC_API_URL=http://localhost:8000`
 
 1. Configure credentials (`aws configure`, or an IAM role when deployed).
 2. In `.env`, remove `AWS_ENDPOINT_URL`, set `AWS_REGION`, and pick globally unique `IMAGES_BUCKET`.
-3. `uv run aws-setup --seed` creates the two DynamoDB tables (on-demand billing) and the S3 bucket with CORS for the frontends.
+3. `uv run aws-setup --seed` creates the three DynamoDB tables (on-demand billing) and the S3 bucket with CORS for the frontends.
 4. Make images readable: either serve the bucket through CloudFront (recommended) and set `IMAGES_PUBLIC_BASE_URL`, or add `--public-images` to make only `products/*` public.
 
 In production keep `JWT_SECRET` and `ADMIN_PASSWORD` in AWS Secrets Manager (or SSM Parameter Store) and expose them to the app as environment variables.
@@ -40,8 +40,10 @@ In production keep `JWT_SECRET` and `ADMIN_PASSWORD` in AWS Secrets Manager (or 
 |--------|------|
 | `routers/public.py` | Storefront: products on sale, place and track orders |
 | `routers/auth.py` | `POST /auth/login` → admin JWT |
+| `routers/customers.py` | `POST /customers/register`, `POST /customers/login` → customer JWT (required by `POST /orders`); `GET /customers/me/orders` order history |
+| `passwords.py` | scrypt password hashing for customer accounts |
 | `routers/admin.py` | `/admin/*`: product CRUD, order status, image upload ticket. Every route checks the token |
-| `stores/dynamodb.py` | DynamoDB tables `aof-products` / `aof-orders`. Orders use `TransactWriteItems` with `stock >= :qty` so the last item can't be sold twice |
+| `stores/dynamodb.py` | DynamoDB tables `aof-products` / `aof-orders` / `aof-customers` (keyed by email). Orders use `TransactWriteItems` with `stock >= :qty` so the last item can't be sold twice |
 | `stores/memory.py` | Same behaviour in memory (`STORE=memory`, used by tests) |
 | `images.py` | Signs an S3 presigned POST so the browser uploads photos straight to S3 |
 | `aws_setup.py` | `uv run aws-setup`: creates tables and bucket |

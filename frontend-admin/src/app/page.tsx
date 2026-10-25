@@ -15,7 +15,9 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
+import { useState } from "react";
 import FruitImage from "@/components/FruitImage";
+import OrderDialog from "@/components/OrderDialog";
 import { listOrders, listProducts } from "@/lib/api";
 import {
   formatDateTime,
@@ -53,6 +55,9 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 export default function DashboardPage() {
   const data = useLoad(() => Promise.all([listOrders(), listProducts()]));
   const [orders, products] = data.data ?? [[], []];
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Look the order up by id so the dialog shows fresh data after a reload.
+  const selected = orders.find((o) => o.id === selectedId) ?? null;
 
   const active = orders.filter((o) => o.status !== "cancelled");
   const todays = active.filter((o) => isToday(o.created_at));
@@ -129,7 +134,12 @@ export default function DashboardPage() {
                 </TableHead>
                 <TableBody>
                   {orders.slice(0, 6).map((o) => (
-                    <TableRow key={o.id} hover>
+                    <TableRow
+                      key={o.id}
+                      hover
+                      onClick={() => setSelectedId(o.id)}
+                      sx={{ cursor: "pointer" }}
+                    >
                       <TableCell sx={{ fontFamily: "monospace" }}>{o.id}</TableCell>
                       <TableCell>{o.customer.name}</TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{formatDateTime(o.created_at)}</TableCell>
@@ -188,6 +198,16 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </Box>
+
+      {selected && (
+        <OrderDialog
+          key={selected.id}
+          order={selected}
+          onClose={() => setSelectedId(null)}
+          // Refresh the stats and both lists (e.g. "รอยืนยัน" count, stock returned on cancel).
+          onUpdated={data.reload}
+        />
+      )}
     </Stack>
   );
 }

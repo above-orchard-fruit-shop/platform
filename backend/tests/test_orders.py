@@ -10,8 +10,9 @@ from backend.stores import Store
 from tests.conftest import CUSTOMER, MakeProduct
 
 
-def place_order(client: TestClient, items: list[dict[str, Any]], **extra: Any) -> Any:
-    return client.post("/orders", json={"customer": CUSTOMER, "items": items, "payment_method": "cod", **extra})
+def place_order(client: TestClient, customer: dict[str, str], items: list[dict[str, Any]], **extra: Any) -> Any:
+    body = {"customer": CUSTOMER, "items": items, "payment_method": "cod", **extra}
+    return client.post("/orders", json=body, headers=customer)
 
 
 def stock_of(client: TestClient, admin: dict[str, str], product_id: str) -> int:
@@ -21,13 +22,13 @@ def stock_of(client: TestClient, admin: dict[str, str], product_id: str) -> int:
 
 
 def test_place_order_prices_on_server_and_deducts_stock(
-    client: TestClient, admin: dict[str, str], make_product: MakeProduct
+    client: TestClient, admin: dict[str, str], make_product: MakeProduct, customer: dict[str, str]
 ) -> None:
     mango = make_product(name="มะม่วง", price=89.5, stock=10)
     lychee = make_product(name="ลิ้นจี่", price=120, stock=3)
 
     res = place_order(
-        client,
+        client, customer,
         [
             {"product_id": mango["id"], "quantity": 2},
             {"product_id": lychee["id"], "quantity": 1},
@@ -58,12 +59,12 @@ def test_place_order_prices_on_server_and_deducts_stock(
 
 
 def test_insufficient_stock_rejects_whole_order(
-    client: TestClient, admin: dict[str, str], make_product: MakeProduct
+    client: TestClient, admin: dict[str, str], make_product: MakeProduct, customer: dict[str, str]
 ) -> None:
     mango = make_product(stock=10)
     lychee = make_product(name="ลิ้นจี่", stock=1, unit="กก.")
 
-    res = place_order(client, [{"product_id": mango["id"], "quantity": 2}, {"product_id": lychee["id"], "quantity": 5}])
+    res = place_order(client, customer, [{"product_id": mango["id"], "quantity": 2}, {"product_id": lychee["id"], "quantity": 5}])
     assert res.status_code == 409
     assert res.json()["detail"] == "ลิ้นจี่ มีในสต็อกเพียง 1 กก."
     assert stock_of(client, admin, mango["id"]) == 10
@@ -71,26 +72,26 @@ def test_insufficient_stock_rejects_whole_order(
 
 
 @pytest.mark.parametrize("case", ["inactive", "missing"])
-def test_unavailable_product_is_409(client: TestClient, make_product: MakeProduct, case: str) -> None:
+def test_unavailable_product_is_409(client: TestClient, make_product: MakeProduct, case: str, customer: dict[str, str]) -> None:
     product_id = make_product(is_active=False)["id"] if case == "inactive" else "p-missing"
-    assert place_order(client, [{"product_id": product_id, "quantity": 1}]).status_code == 409
+    assert place_order(client, customer, [{"product_id": product_id, "quantity": 1}]).status_code == 409
 
 
-def test_order_validation(client: TestClient, make_product: MakeProduct) -> None:
+def test_order_validation(client: TestClient, make_product: MakeProduct, customer: dict[str, str]) -> None:
     item = [{"product_id": make_product()["id"], "quantity": 1}]
 
-    assert place_order(client, []).status_code == 422
-    assert place_order(client, [{**item[0], "quantity": 0}]).status_code == 422
-    assert place_order(client, item, payment_method="bitcoin").status_code == 422
+    assert place_order(client, customer, []).status_code == 422
+    assert place_order(client, customer, [{**item[0], "quantity": 0}]).status_code == 422
+    assert place_order(client, customer, item, payment_method="bitcoin").status_code == 422
     for phone in ["812345678", "08123", "+66812345678", "08-1234-5678"]:
-        res = client.post("/orders", json={"customer": {**CUSTOMER, "phone": phone}, "items": item, "payment_method": "cod"})
+        res = client.post("/orders", json={"customer": {**CUSTOMER, "phone": phone}, "items": item, "payment_method": "cod"}, headers=customer)
         assert res.status_code == 422, phone
-    res = client.post("/orders", json={"customer": {**CUSTOMER, "email": "nope"}, "items": item, "payment_method": "cod"})
+    res = client.post("/orders", json={"customer": {**CUSTOMER, "email": "nope"}, "items": item, "payment_method": "cod"}, headers=customer)
     assert res.status_code == 422
 
 
-def test_status_flow(client: TestClient, admin: dict[str, str], make_product: MakeProduct) -> None:
-    order_id = place_order(client, [{"product_id": make_product()["id"], "quantity": 1}]).json()["id"]
+def test_status_flow(client: TestClient, admin: dict[str, str], make_product: MakeProduct, customer: dict[str, str]) -> None:
+    order_id = place_order(client, customer, [{"product_id": make_product()["id"], "quantity": 1}]).json()["id"]
 
     for status in ["confirmed", "shipping", "completed"]:
         res = client.patch(f"/admin/orders/{order_id}", json={"status": status}, headers=admin)
@@ -102,17 +103,17 @@ def test_status_flow(client: TestClient, admin: dict[str, str], make_product: Ma
     assert res.json()["detail"] == "คำสั่งซื้อนี้ปิดแล้ว เปลี่ยนสถานะไม่ได้"
 
 
-def test_skipping_a_step_is_409(client: TestClient, admin: dict[str, str], make_product: MakeProduct) -> None:
-    order_id = place_order(client, [{"product_id": make_product()["id"], "quantity": 1}]).json()["id"]
+def test_skipping_a_step_is_409(client: TestClient, admin: dict[str, str], make_product: MakeProduct, customer: dict[str, str]) -> None:
+    order_id = place_order(client, customer, [{"product_id": make_product()["id"], "quantity": 1}]).json()["id"]
     res = client.patch(f"/admin/orders/{order_id}", json={"status": "completed"}, headers=admin)
     assert res.status_code == 409
 
 
-def test_cancel_returns_stock(client: TestClient, admin: dict[str, str], make_product: MakeProduct) -> None:
+def test_cancel_returns_stock(client: TestClient, admin: dict[str, str], make_product: MakeProduct, customer: dict[str, str]) -> None:
     kept = make_product(stock=5)
     deleted = make_product(name="ลิ้นจี่", stock=5)
     order_id = place_order(
-        client, [{"product_id": kept["id"], "quantity": 4}, {"product_id": deleted["id"], "quantity": 1}]
+        client, customer, [{"product_id": kept["id"], "quantity": 4}, {"product_id": deleted["id"], "quantity": 1}]
     ).json()["id"]
     client.delete(f"/admin/products/{deleted['id']}", headers=admin)
 
@@ -121,9 +122,9 @@ def test_cancel_returns_stock(client: TestClient, admin: dict[str, str], make_pr
     assert stock_of(client, admin, kept["id"]) == 5
 
 
-def test_admin_orders_newest_first(client: TestClient, admin: dict[str, str], make_product: MakeProduct) -> None:
+def test_admin_orders_newest_first(client: TestClient, admin: dict[str, str], make_product: MakeProduct, customer: dict[str, str]) -> None:
     item = [{"product_id": make_product()["id"], "quantity": 1}]
-    ids = [place_order(client, item).json()["id"] for _ in range(3)]
+    ids = [place_order(client, customer, item).json()["id"] for _ in range(3)]
     listed = [o["id"] for o in client.get("/admin/orders", headers=admin).json()]
     assert set(listed) == set(ids)
     created = [o["created_at"] for o in client.get("/admin/orders", headers=admin).json()]
@@ -143,7 +144,7 @@ def test_last_item_cannot_be_sold_twice(store: Store, make_product: MakeProduct)
     )
 
     async def race() -> list[object]:
-        return await asyncio.gather(store.create_order(order), store.create_order(order), return_exceptions=True)
+        return await asyncio.gather(store.create_order(order, customer_id="c-1"), store.create_order(order, customer_id="c-2"), return_exceptions=True)
 
     results = asyncio.run(race())
     assert sum(isinstance(r, ConflictError) for r in results) == 1

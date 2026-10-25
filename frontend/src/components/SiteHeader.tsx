@@ -1,20 +1,34 @@
 "use client";
 
+import AccountCircleOutlinedIcon from "@mui/icons-material/AccountCircleOutlined";
+import LoginIcon from "@mui/icons-material/Login";
+import LogoutIcon from "@mui/icons-material/Logout";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import AppBar from "@mui/material/AppBar";
 import Badge from "@mui/material/Badge";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
+import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
-import { isMockMode } from "@/lib/api";
-import { useCart } from "@/lib/cart";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { isMockMode, logoutCustomer } from "@/lib/api";
+import { cartActions, useCart } from "@/lib/cart";
+import { loginHref, useAuth } from "@/lib/session";
+import type { CustomerAccount } from "@/lib/types";
 
 export default function SiteHeader() {
-  const { count } = useCart();
+  const auth = useAuth();
+  const pathname = usePathname();
+  // On the login/sign-up pages the button would only drop their ?next= target.
+  const onAuthPage = pathname === "/login" || pathname === "/register";
 
   return (
     <AppBar
@@ -64,18 +78,90 @@ export default function SiteHeader() {
           <Button component={Link} href="/track" color="inherit">
             ติดตามคำสั่งซื้อ
           </Button>
-          <IconButton
-            component={Link}
-            href="/cart"
-            aria-label={`ตะกร้าสินค้า ${count} ชิ้น`}
-            color="primary"
-          >
-            <Badge badgeContent={count} color="secondary" max={99}>
-              <ShoppingCartOutlinedIcon />
-            </Badge>
-          </IconButton>
+          {auth.status === "signed-in" ? (
+            <>
+              <CartButton />
+              <AccountMenu customer={auth.session.customer} />
+            </>
+          ) : auth.status === "signed-out" && !onAuthPage ? (
+            <Button
+              component={Link}
+              href={loginHref(pathname)}
+              variant="contained"
+              startIcon={<LoginIcon />}
+              sx={{ flexShrink: 0 }}
+            >
+              เข้าสู่ระบบ
+            </Button>
+          ) : (
+            // Sign-in state is unknown until hydration; keep the space so nothing jumps.
+            <Box sx={{ width: 40, height: 40 }} />
+          )}
         </Toolbar>
       </Container>
     </AppBar>
+  );
+}
+
+function CartButton() {
+  const { count } = useCart();
+  return (
+    <IconButton
+      component={Link}
+      href="/cart"
+      aria-label={`ตะกร้าสินค้า ${count} ชิ้น`}
+      color="primary"
+    >
+      <Badge badgeContent={count} color="secondary" max={99}>
+        <ShoppingCartOutlinedIcon />
+      </Badge>
+    </IconButton>
+  );
+}
+
+function AccountMenu({ customer }: { customer: CustomerAccount }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+
+  function logout() {
+    setAnchor(null);
+    // The cart belongs to this shopper; don't leave it for the next person on this device.
+    cartActions.clear();
+    logoutCustomer();
+  }
+
+  return (
+    <>
+      <IconButton
+        aria-label={`บัญชีของ ${customer.name}`}
+        aria-haspopup="menu"
+        onClick={(e) => setAnchor(e.currentTarget)}
+        color="primary"
+      >
+        <AccountCircleOutlinedIcon />
+      </IconButton>
+      <Menu
+        anchorEl={anchor}
+        open={anchor !== null}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Box sx={{ px: 2, py: 1, maxWidth: 260 }}>
+          <Typography sx={{ fontWeight: 600 }} noWrap>
+            {customer.name}
+          </Typography>
+          <Typography variant="body2" sx={{ color: "text.secondary" }} noWrap>
+            {customer.email}
+          </Typography>
+        </Box>
+        <Divider />
+        <MenuItem onClick={logout}>
+          <ListItemIcon>
+            <LogoutIcon fontSize="small" />
+          </ListItemIcon>
+          ออกจากระบบ
+        </MenuItem>
+      </Menu>
+    </>
   );
 }

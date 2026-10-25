@@ -5,6 +5,7 @@ from fastapi import APIRouter, status
 from backend.dependencies import StoreDep
 from backend.errors import NotFoundError
 from backend.schemas import Order, OrderInput, Product
+from backend.security import CustomerDep
 
 router = APIRouter(tags=["storefront"])
 
@@ -29,15 +30,19 @@ async def get_product(product_id: str, store: StoreDep) -> Product:
 @router.post(
     "/orders",
     status_code=status.HTTP_201_CREATED,
-    summary="Place an order",
-    description="Prices and total are computed on the server from current product data; stock is deducted atomically.",
+    summary="Place an order (customer login required)",
+    description=(
+        "Requires `Authorization: Bearer <token>` from /customers/login or /customers/register. "
+        "Prices and total are computed on the server from current product data; stock is deducted atomically."
+    ),
     responses={
+        status.HTTP_401_UNAUTHORIZED: {"description": "Not signed in as a customer"},
         status.HTTP_409_CONFLICT: {"description": "A product is unavailable or out of stock"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"description": "Invalid customer details or items"},
     },
 )
-async def create_order(payload: OrderInput, store: StoreDep) -> Order:
-    return await store.create_order(payload)
+async def create_order(payload: OrderInput, store: StoreDep, customer: CustomerDep) -> Order:
+    return await store.create_order(payload, customer_id=customer.id)
 
 
 @router.get(

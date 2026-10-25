@@ -11,7 +11,7 @@ import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import FruitImage from "@/components/FruitImage";
 import QuantityStepper from "@/components/QuantityStepper";
@@ -19,6 +19,7 @@ import { useToast } from "@/components/Toast";
 import { getProduct } from "@/lib/api";
 import { cartActions, useCart } from "@/lib/cart";
 import { formatTHB } from "@/lib/format";
+import { loginHref, useAuth } from "@/lib/session";
 import { useLoad } from "@/lib/use-load";
 
 export default function ProductPage() {
@@ -26,6 +27,8 @@ export default function ProductPage() {
   const { data: product, loading, error } = useLoad(() => getProduct(id), id);
   const { items } = useCart();
   const toast = useToast();
+  const auth = useAuth();
+  const router = useRouter();
   const [quantity, setQuantity] = useState(1);
 
   const inCart = items.find((l) => l.product.id === id)?.quantity ?? 0;
@@ -87,6 +90,10 @@ export default function ProductPage() {
                   size="large"
                   startIcon={<AddShoppingCartIcon />}
                   onClick={() => {
+                    if (auth.status !== "signed-in") {
+                      router.push(loginHref(`/products/${id}`));
+                      return;
+                    }
                     const qty = Math.min(quantity, available);
                     cartActions.add(product, qty);
                     toast(`เพิ่ม ${product.name} ${qty} ${product.unit} ลงตะกร้าแล้ว`);

@@ -18,6 +18,7 @@ from backend.schemas import (
     OrderStatus,
     Product,
     ProductInput,
+    StoredCustomer,
 )
 
 CENT = Decimal("0.01")
@@ -32,9 +33,19 @@ class Store(Protocol):
     async def delete_product(self, product_id: str) -> None: ...
 
     async def list_orders(self) -> list[Order]: ...
+    async def list_orders_for_customer(self, customer_id: str) -> list[Order]:
+        """The customer's own orders, newest first."""
+        ...
+
     async def get_order(self, order_id: str) -> Order: ...
-    async def create_order(self, data: OrderInput) -> Order: ...
+    async def create_order(self, data: OrderInput, *, customer_id: str) -> Order: ...
     async def update_order_status(self, order_id: str, new_status: OrderStatus) -> Order: ...
+
+    async def create_customer(self, customer: StoredCustomer) -> None:
+        """Raises ConflictError when the email is already registered."""
+        ...
+
+    async def get_customer_by_email(self, email: str) -> StoredCustomer | None: ...
 
 
 def new_product_id() -> str:
@@ -64,7 +75,9 @@ def merge_quantities(data: OrderInput) -> dict[str, int]:
     return dict(quantities)
 
 
-def build_order(data: OrderInput, quantities: Mapping[str, int], products: Mapping[str, Product]) -> Order:
+def build_order(
+    data: OrderInput, quantities: Mapping[str, int], products: Mapping[str, Product], *, customer_id: str
+) -> Order:
     """Validate every line against current product data and price the order on the server.
 
     Raises ConflictError (409) for a missing/inactive product or not enough stock.
@@ -90,6 +103,7 @@ def build_order(data: OrderInput, quantities: Mapping[str, int], products: Mappi
     total = sum((i.price * i.quantity for i in items), Decimal(0)).quantize(CENT)
     return Order(
         id=new_order_id(),
+        customer_id=customer_id,
         customer=data.customer,
         items=items,
         total=total,
@@ -98,6 +112,9 @@ def build_order(data: OrderInput, quantities: Mapping[str, int], products: Mappi
         note=data.note or None,
         created_at=datetime.now(UTC),
     )
+
+
+EMAIL_TAKEN = "อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบ"
 
 
 def check_transition(current: OrderStatus, new_status: OrderStatus) -> None:

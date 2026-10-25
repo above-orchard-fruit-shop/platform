@@ -9,8 +9,10 @@ import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { cartActions } from "@/lib/cart";
 import { formatTHB } from "@/lib/format";
+import { loginHref, useAuth } from "@/lib/session";
 import type { Product } from "@/lib/types";
 import FruitImage from "./FruitImage";
 import { useToast } from "./Toast";
@@ -19,6 +21,9 @@ export const LOW_STOCK = 10;
 
 export default function ProductCard({ product }: { product: Product }) {
   const toast = useToast();
+  const auth = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const soldOut = product.stock <= 0;
 
   return (
@@ -60,6 +65,10 @@ export default function ProductCard({ product }: { product: Product }) {
           startIcon={<AddShoppingCartIcon />}
           disabled={soldOut}
           onClick={() => {
+            if (auth.status !== "signed-in") {
+              router.push(loginHref(pathname));
+              return;
+            }
             cartActions.add(product, 1);
             toast(`เพิ่ม ${product.name} ลงตะกร้าแล้ว`);
           }}

@@ -1,15 +1,19 @@
 """DynamoDB-backed store.
 
-Two tables, both keyed by a string `id`:
-- products: one item per product
-- orders:   one item per order (customer and line items embedded)
+Three tables:
+- products:  one item per product, keyed by `id`
+- orders:    one item per order (customer and line items embedded), keyed by `id`
+- customers: one item per customer account, keyed by `email` (lower-case), so
+             login is a single GetItem and a duplicate sign-up fails its
+             `attribute_not_exists(email)` condition
 
 Placing and cancelling an order use TransactWriteItems so stock changes and the
 order write succeed or fail together, and a ConditionExpression (`stock >= :qty`)
 stops two customers from buying the last item at the same time.
 
-Listing uses Scan, which is fine for a small shop catalogue. Add a GSI (e.g. on
-status + created_at) when the orders table grows large.
+Listing uses Scan, which is fine for a small shop catalogue. When the orders
+table grows large, add GSIs (customer_id + created_at for order history,
+status + created_at for the admin list) and Query them instead.
 
 boto3 is synchronous, so each call runs in a worker thread via asyncio.to_thread
 to keep the event loop free.
@@ -26,8 +30,9 @@ if TYPE_CHECKING:
     from mypy_boto3_dynamodb.client import DynamoDBClient
 
 from backend.errors import ConflictError, NotFoundError
-from backend.schemas import Order, OrderInput, OrderStatus, Product, ProductInput
+from backend.schemas import Order, OrderInput, OrderStatus, Product, ProductInput, StoredCustomer
 from backend.stores.base import (
+    EMAIL_TAKEN,
     build_order,
     check_transition,
     merge_quantities,
@@ -72,10 +77,13 @@ def _is_condition_failure(err: ClientError) -> bool:
 
 
 class DynamoDBStore:
-    def __init__(self, client: "DynamoDBClient", *, products_table: str, orders_table: str) -> None:
+    def __init__(
+        self, client: "DynamoDBClient", *, products_table: str, orders_table: str, customers_table: str
+    ) -> None:
         self._db = client
         self._products = products_table
         self._orders = orders_table
+        self._customers = customers_table
 
     # --- products -----------------------------------------------------------
 
@@ -132,6 +140,14 @@ class DynamoDBStore:
     async def list_orders(self) -> list[Order]:
         return sort_orders([_order_from_item(i) for i in await self._scan(self._orders)])
 
+    async def list_orders_for_customer(self, customer_id: str) -> list[Order]:
+        items = await self._scan(
+            self._orders,
+            FilterExpression="customer_id = :cid",
+            ExpressionAttributeValues=_values(cid=customer_id),
+        )
+        return sort_orders([_order_from_item(i) for i in items])
+
     async def get_order(self, order_id: str) -> Order:
         res = await asyncio.to_thread(
             self._db.get_item,
@@ -143,10 +159,10 @@ class DynamoDBStore:
             raise NotFoundError("ไม่พบคำสั่งซื้อนี้")
         return _order_from_item(res["Item"])
 
-    async def create_order(self, data: OrderInput) -> Order:
+    async def create_order(self, data: OrderInput, *, customer_id: str) -> Order:
         quantities = merge_quantities(data)
         products = await self._get_products(list(quantities))
-        order = build_order(data, quantities, products)
+        order = build_order(data, quantities, products, customer_id=customer_id)
 
         # Each stock update re-checks, inside the transaction, what build_order
         # checked above, so a concurrent order or admin edit can't slip in between.
@@ -179,7 +195,7 @@ class DynamoDBStore:
                 raise
             # Something changed after we read the products. Re-validate against
             # fresh data to report the precise reason (sold out, hidden, ...).
-            build_order(data, quantities, await self._get_products(list(quantities)))
+            build_order(data, quantities, await self._get_products(list(quantities)), customer_id=customer_id)
             raise ConflictError("ข้อมูลสินค้ามีการเปลี่ยนแปลง กรุณาลองใหม่อีกครั้ง") from err
         return order
 
@@ -225,12 +241,38 @@ class DynamoDBStore:
             raise
         return order.model_copy(update={"status": new_status})
 
+    # --- customers ----------------------------------------------------------
+
+    async def create_customer(self, customer: StoredCustomer) -> None:
+        try:
+            await asyncio.to_thread(
+                self._db.put_item,
+                TableName=self._customers,
+                Item=_to_item(customer.model_dump()),
+                ConditionExpression="attribute_not_exists(email)",
+            )
+        except ClientError as err:
+            if _is_condition_failure(err):
+                raise ConflictError(EMAIL_TAKEN) from err
+            raise
+
+    async def get_customer_by_email(self, email: str) -> StoredCustomer | None:
+        res = await asyncio.to_thread(
+            self._db.get_item,
+            TableName=self._customers,
+            Key=_to_item({"email": email}),
+            ConsistentRead=True,
+        )
+        return StoredCustomer.model_validate(_from_item(res["Item"])) if "Item" in res else None
+
     # --- helpers ------------------------------------------------------------
 
-    async def _scan(self, table: str) -> list[Item]:
+    async def _scan(self, table: str, **filters: Any) -> list[Item]:
+        """Read every page of a Scan. `filters` (FilterExpression, ...) is applied by DynamoDB."""
+
         def scan_all() -> list[Item]:
             items: list[Item] = []
-            for page in self._db.get_paginator("scan").paginate(TableName=table, ConsistentRead=True):
+            for page in self._db.get_paginator("scan").paginate(TableName=table, ConsistentRead=True, **filters):
                 items.extend(page["Items"])
             return items
 

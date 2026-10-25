@@ -7,7 +7,7 @@ from backend import aws
 from backend.config import Settings, get_settings
 from backend.errors import register_error_handlers
 from backend.images import ImageUploader
-from backend.routers import admin, auth, public
+from backend.routers import admin, auth, customers, public
 from backend.security import TokenService
 from backend.stores import DynamoDBStore, InMemoryStore, Store
 
@@ -21,6 +21,7 @@ def _default_store(settings: Settings) -> Store:
         aws.client("dynamodb", settings),
         products_table=settings.products_table,
         orders_table=settings.orders_table,
+        customers_table=settings.customers_table,
     )
 
 
@@ -60,5 +61,6 @@ def create_app(
 
     app.include_router(public.router)
     app.include_router(auth.router)
+    app.include_router(customers.router)
     app.include_router(admin.router)
     return app

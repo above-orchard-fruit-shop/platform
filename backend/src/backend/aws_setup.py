@@ -22,14 +22,20 @@ from backend.stores.dynamodb import _to_item
 def create_tables(settings: Settings) -> None:
     db = aws.client("dynamodb", settings)
     existing = set(db.list_tables()["TableNames"])
-    for table in (settings.products_table, settings.orders_table):
+    # table name -> partition key
+    tables = {
+        settings.products_table: "id",
+        settings.orders_table: "id",
+        settings.customers_table: "email",
+    }
+    for table, key in tables.items():
         if table in existing:
             print(f"table {table}: exists")
             continue
         db.create_table(
             TableName=table,
-            AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
-            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": key, "AttributeType": "S"}],
+            KeySchema=[{"AttributeName": key, "KeyType": "HASH"}],
             BillingMode="PAY_PER_REQUEST",
         )
         db.get_waiter("table_exists").wait(TableName=table)
