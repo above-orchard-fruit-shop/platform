@@ -19,7 +19,6 @@ Product {
   price: number             // THB per unit
   unit: string              // "กก.", "ลูก", "หวี", ...
   stock: number             // integer >= 0
-  emoji?: string | null     // fallback picture
   image_url?: string | null // S3 / CloudFront URL (https://)
   is_active: boolean        // false = hidden from the storefront
 }
@@ -87,6 +86,24 @@ completed, cancelled → (final, respond 409)
 ```
 
 Cancelling an order puts its quantities back into stock.
+
+## Product images (S3 presigned upload)
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/admin/uploads/product-image` | `{ content_type: "image/jpeg" \| "image/png" \| "image/webp", size }` | `{ upload_url, fields, image_url, expires_in }` · 413 if `size` > 5 MB |
+
+The file never passes through the API:
+
+1. The admin app asks for an upload ticket (above).
+2. It POSTs `multipart/form-data` to `upload_url`: every entry of `fields` first,
+   then the file as `file`. S3 rejects anything that doesn't match the signed
+   policy (key, content type, max size) or arrives after `expires_in` seconds.
+3. It saves `image_url` on the product with `POST`/`PUT /admin/products`.
+
+The bucket needs a CORS rule for the admin origin, and `image_url` must be
+publicly readable (CloudFront, or a bucket policy on `products/*`).
+`uv run aws-setup` in `backend/` sets this up.
 
 ## CORS
 

@@ -23,10 +23,18 @@ cp .env.example .env.local   # optional, see below
 npm run dev                  # http://localhost:3000
 ```
 
+Other scripts: `npm run build` (production build), `npm start` (serve the build), `npm run lint`.
+
 ### Backend connection
 
 - `NEXT_PUBLIC_API_URL` **empty** → mock mode: products and orders are stored in this browser, so the UI works without the backend. An orange banner is shown.
-- `NEXT_PUBLIC_API_URL=http://localhost:8000` → calls the FastAPI backend. The endpoints are listed in [`../API.md`](../API.md).
+- `NEXT_PUBLIC_API_URL=http://localhost:8000` → calls the FastAPI backend. The endpoints are listed in [`../API.md`](../API.md). Start the emulator and the backend first (see [`../backend/README.md`](../backend/README.md)), then `npm run dev`.
+
+Restart `npm run dev` after editing `.env.local`; Next.js reads it only at startup.
+
+### Product images
+
+Pictures come from each product's `image_url` (uploaded to S3 from the admin dashboard). Products without one, or whose image fails to load, show `public/notfound.png`.
 
 ## Code layout
 

@@ -11,8 +11,8 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
-import { useState, type FormEvent } from "react";
-import { type ProductInput } from "@/lib/api";
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import { IMAGE_TYPES, isMockMode, uploadProductImage, type ProductInput } from "@/lib/api";
 import type { Product } from "@/lib/types";
 import FruitImage from "./FruitImage";
 
@@ -23,7 +23,6 @@ type Form = {
   price: string;
   unit: string;
   stock: string;
-  emoji: string;
   image_url: string;
   is_active: boolean;
 };
@@ -37,7 +36,6 @@ function toForm(p?: Product | null): Form {
     price: p ? String(p.price) : "",
     unit: p?.unit ?? "กก.",
     stock: p ? String(p.stock) : "0",
-    emoji: p?.emoji ?? "",
     image_url: p?.image_url ?? "",
     is_active: p?.is_active ?? true,
   };
@@ -52,7 +50,9 @@ function validate(f: Form): Errors {
   if (f.price === "" || !Number.isFinite(price) || price < 0) e.price = "ราคาต้องเป็นตัวเลข ≥ 0";
   const stock = Number(f.stock);
   if (f.stock === "" || !Number.isInteger(stock) || stock < 0) e.stock = "สต็อกต้องเป็นจำนวนเต็ม ≥ 0";
-  if (f.image_url && !/^https:\/\//.test(f.image_url)) e.image_url = "ต้องเป็นลิงก์ https://";
+  // http is allowed only for the local AWS emulator during development.
+  if (f.image_url && !/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/)\S+$/.test(f.image_url))
+    e.image_url = "ต้องเป็นลิงก์ https://";
   return e;
 }
 
@@ -70,6 +70,24 @@ export default function ProductDialog({ product, categories, onClose, onSubmit }
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow choosing the same file again
+    if (!file) return;
+    setUploading(true);
+    setSaveError(null);
+    try {
+      const url = await uploadProductImage(file);
+      setForm((f) => ({ ...f, image_url: url }));
+      setErrors((prev) => ({ ...prev, image_url: undefined }));
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const field = (key: Exclude<keyof Form, "is_active">) => ({
     value: form[key],
@@ -94,7 +112,6 @@ export default function ProductDialog({ product, categories, onClose, onSubmit }
         price: Number(form.price),
         unit: form.unit.trim(),
         stock: Number(form.stock),
-        emoji: form.emoji.trim() || null,
         image_url: form.image_url.trim() || null,
         is_active: form.is_active,
       });
@@ -112,13 +129,34 @@ export default function ProductDialog({ product, categories, onClose, onSubmit }
           <Stack sx={{ gap: 2 }}>
             {saveError && <Alert severity="error">{saveError}</Alert>}
             <Stack direction="row" sx={{ gap: 2, alignItems: "flex-start" }}>
-              <Box sx={{ width: 96, flexShrink: 0, border: 1, borderColor: "divider", borderRadius: 3, overflow: "hidden" }}>
-                <FruitImage
-                  product={{ name: form.name, emoji: form.emoji, image_url: errors.image_url ? null : form.image_url }}
-                  height={96}
-                  size={48}
-                />
-              </Box>
+              <Stack sx={{ width: 112, flexShrink: 0, gap: 1 }}>
+                <Box sx={{ border: 1, borderColor: "divider", borderRadius: 3, overflow: "hidden" }}>
+                  <FruitImage
+                    product={{ name: form.name, image_url: errors.image_url ? null : form.image_url }}
+                    height={112}
+                  />
+                </Box>
+                <Button
+                  component="label"
+                  size="small"
+                  variant="outlined"
+                  disabled={isMockMode || uploading || saving}
+                  title={isMockMode ? "อัปโหลดรูปได้เมื่อเชื่อมต่อ backend แล้ว" : undefined}
+                >
+                  {uploading ? "กำลังอัปโหลด..." : "อัปโหลดรูป"}
+                  <input hidden type="file" accept={IMAGE_TYPES.join(",")} onChange={handleImageChange} />
+                </Button>
+                {form.image_url && (
+                  <Button
+                    size="small"
+                    color="inherit"
+                    disabled={uploading || saving}
+                    onClick={() => setForm((f) => ({ ...f, image_url: "" }))}
+                  >
+                    ลบรูป
+                  </Button>
+                )}
+              </Stack>
               <Stack sx={{ gap: 2, flex: 1 }}>
                 <TextField label="ชื่อสินค้า" required autoFocus {...field("name")} />
                 <TextField
@@ -140,15 +178,12 @@ export default function ProductDialog({ product, categories, onClose, onSubmit }
               <TextField label="สต็อก" type="number" required fullWidth {...field("stock")} slotProps={{ htmlInput: { min: 0, step: 1 } }} />
             </Stack>
             <TextField label="รายละเอียด" multiline minRows={3} {...field("description")} />
-            <Stack direction="row" sx={{ gap: 2 }}>
-              <TextField label="อีโมจิ" sx={{ width: 120 }} {...field("emoji")} placeholder="🍎" />
-              <TextField
-                label="ลิงก์รูปภาพ (S3/CloudFront)"
-                fullWidth
-                {...field("image_url")}
-                placeholder="https://..."
-              />
-            </Stack>
+            <TextField
+              label="ลิงก์รูปภาพ (S3/CloudFront)"
+              fullWidth
+              {...field("image_url")}
+              placeholder="https://..."
+            />
             <FormControlLabel
               control={
                 <Switch
@@ -164,7 +199,7 @@ export default function ProductDialog({ product, categories, onClose, onSubmit }
           <Button onClick={onClose} disabled={saving}>
             ยกเลิก
           </Button>
-          <Button type="submit" variant="contained" disabled={saving}>
+          <Button type="submit" variant="contained" disabled={saving || uploading}>
             {saving ? "กำลังบันทึก..." : "บันทึก"}
           </Button>
         </DialogActions>

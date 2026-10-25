@@ -27,6 +27,7 @@ import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { useState } from "react";
+import FruitImage from "@/components/FruitImage";
 import ProductDialog from "@/components/ProductDialog";
 import { useToast } from "@/components/Toast";
 import {
@@ -137,8 +138,8 @@ export default function ProductsPage() {
                 <TableRow key={p.id} hover sx={{ opacity: p.is_active ? 1 : 0.6 }}>
                   <TableCell>
                     <Stack direction="row" sx={{ alignItems: "center", gap: 1.5 }}>
-                      <Box component="span" sx={{ fontSize: 28 }} aria-hidden>
-                        {p.emoji || "🧺"}
+                      <Box sx={{ width: 48, flexShrink: 0, borderRadius: 2, overflow: "hidden" }}>
+                        <FruitImage product={p} height={48} />
                       </Box>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 600 }}>{p.name}</Typography>

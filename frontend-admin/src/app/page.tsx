@@ -15,6 +15,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
+import FruitImage from "@/components/FruitImage";
 import { listOrders, listProducts } from "@/lib/api";
 import {
   formatDateTime,
@@ -169,8 +170,8 @@ export default function DashboardPage() {
               <Stack sx={{ gap: 1 }}>
                 {lowStock.map((p) => (
                   <Stack key={p.id} direction="row" sx={{ alignItems: "center", gap: 1 }}>
-                    <Box component="span" sx={{ fontSize: 24 }} aria-hidden>
-                      {p.emoji || "🧺"}
+                    <Box sx={{ width: 36, flexShrink: 0, borderRadius: 1.5, overflow: "hidden" }}>
+                      <FruitImage product={p} height={36} />
                     </Box>
                     <Typography sx={{ flex: 1 }} noWrap>
                       {p.name}

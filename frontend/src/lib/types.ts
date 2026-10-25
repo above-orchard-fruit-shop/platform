@@ -8,7 +8,6 @@ export type Product = {
   price: number; // THB per unit
   unit: string; // e.g. "กก.", "ลูก", "หวี"
   stock: number;
-  emoji?: string | null; // fallback picture when there is no image_url
   image_url?: string | null; // e.g. an S3 / CloudFront URL
   is_active: boolean;
 };

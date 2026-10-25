@@ -49,7 +49,7 @@ export default function CartPage() {
               {i > 0 && <Divider />}
               <Stack direction="row" sx={{ p: 2, gap: 2, alignItems: "center" }}>
                 <Box sx={{ width: 72, flexShrink: 0 }}>
-                  <FruitImage product={line.product} height={72} size={40} rounded />
+                  <FruitImage product={line.product} height={72} rounded />
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography

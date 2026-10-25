@@ -51,7 +51,7 @@ export default function ProductPage() {
       ) : (
         <Box sx={{ display: "grid", gap: 4, gridTemplateColumns: { md: "1fr 1fr" } }}>
           <Box sx={{ border: 1, borderColor: "divider", borderRadius: 3, overflow: "hidden" }}>
-            <FruitImage product={product} height={380} size={160} />
+            <FruitImage product={product} height={380} />
           </Box>
           <Stack sx={{ gap: 2 }}>
             <Chip label={product.category} size="small" sx={{ width: "fit-content" }} />

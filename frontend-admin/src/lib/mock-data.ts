@@ -11,7 +11,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 89,
     unit: "กก.",
     stock: 40,
-    emoji: "🥭",
     is_active: true,
   },
   {
@@ -22,7 +21,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 55,
     unit: "หวี",
     stock: 25,
-    emoji: "🍌",
     is_active: true,
   },
   {
@@ -33,7 +31,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 35,
     unit: "ลูก",
     stock: 60,
-    emoji: "🍍",
     is_active: true,
   },
   {
@@ -44,7 +41,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 30,
     unit: "ลูก",
     stock: 80,
-    emoji: "🥥",
     is_active: true,
   },
   {
@@ -55,7 +51,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 25,
     unit: "กก.",
     stock: 8,
-    emoji: "🍉",
     is_active: true,
   },
   {
@@ -66,7 +61,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 79,
     unit: "กก.",
     stock: 35,
-    emoji: "🍊",
     is_active: true,
   },
   {
@@ -77,7 +71,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 129,
     unit: "กก.",
     stock: 30,
-    emoji: "🍎",
     is_active: true,
   },
   {
@@ -88,7 +81,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 290,
     unit: "พวง",
     stock: 12,
-    emoji: "🍇",
     is_active: true,
   },
   {
@@ -99,7 +91,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 199,
     unit: "กล่อง",
     stock: 5,
-    emoji: "🍓",
     is_active: true,
   },
   {
@@ -110,7 +101,6 @@ export const SEED_PRODUCTS: Product[] = [
     price: 159,
     unit: "แพ็ก",
     stock: 0,
-    emoji: "🥝",
     is_active: true,
   },
 ];

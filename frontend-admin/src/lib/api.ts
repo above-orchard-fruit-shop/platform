@@ -49,7 +49,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้", 0);
   }
-  if (res.status === 401) {
+  // A 401 without a token is a failed login: fall through and show the server's message.
+  if (res.status === 401 && token) {
     setToken(null); // expired or invalid session → back to login
     throw new ApiError("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่", 401);
   }
@@ -121,6 +122,57 @@ export function deleteProduct(id: string): Promise<void> {
   return request<void>(`/admin/products/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+// ---------------------------------------------------------------------------
+// Product images (S3)
+// ---------------------------------------------------------------------------
+
+export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+type ImageType = (typeof IMAGE_TYPES)[number];
+export const MAX_IMAGE_MB = 5;
+
+type UploadTicket = {
+  upload_url: string;
+  fields: Record<string, string>;
+  image_url: string;
+};
+
+function isImageType(type: string): type is ImageType {
+  return (IMAGE_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * Upload a product photo straight to S3 and return its public URL.
+ * The backend only signs a short-lived upload policy; the file never passes through it.
+ */
+export async function uploadProductImage(file: File): Promise<string> {
+  if (isMockMode) {
+    throw new ApiError("อัปโหลดรูปได้เมื่อเชื่อมต่อ backend แล้ว (ตั้งค่า NEXT_PUBLIC_API_URL)", 0);
+  }
+  if (!isImageType(file.type)) throw new ApiError("รองรับเฉพาะไฟล์ JPG, PNG หรือ WebP", 422);
+  if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+    throw new ApiError(`ไฟล์ใหญ่เกินไป (สูงสุด ${MAX_IMAGE_MB} MB)`, 413);
+  }
+
+  const ticket = await request<UploadTicket>("/admin/uploads/product-image", {
+    method: "POST",
+    body: JSON.stringify({ content_type: file.type, size: file.size }),
+  });
+
+  // S3 requires the policy fields first and the file as the last field.
+  const form = new FormData();
+  for (const [key, value] of Object.entries(ticket.fields)) form.append(key, value);
+  form.append("file", file);
+
+  let res: Response;
+  try {
+    res = await fetch(ticket.upload_url, { method: "POST", body: form });
+  } catch {
+    throw new ApiError("อัปโหลดรูปไม่สำเร็จ: เชื่อมต่อที่เก็บไฟล์ไม่ได้", 0);
+  }
+  if (!res.ok) throw new ApiError(`อัปโหลดรูปไม่สำเร็จ (${res.status})`, res.status);
+  return ticket.image_url;
 }
 
 // ---------------------------------------------------------------------------

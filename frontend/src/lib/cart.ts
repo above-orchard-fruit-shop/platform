@@ -5,7 +5,7 @@ import type { Product } from "./types";
 
 export type CartProduct = Pick<
   Product,
-  "id" | "name" | "price" | "unit" | "stock" | "emoji" | "image_url"
+  "id" | "name" | "price" | "unit" | "stock" | "image_url"
 >;
 export type CartLine = { product: CartProduct; quantity: number };
 
@@ -73,8 +73,8 @@ function getServerSnapshot() {
 }
 
 function toCartProduct(p: CartProduct): CartProduct {
-  const { id, name, price, unit, stock, emoji, image_url } = p;
-  return { id, name, price, unit, stock, emoji, image_url };
+  const { id, name, price, unit, stock, image_url } = p;
+  return { id, name, price, unit, stock, image_url };
 }
 
 export const cartActions = {
