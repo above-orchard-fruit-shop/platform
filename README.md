@@ -27,3 +27,5 @@ platform/
 ├── frontend/         # Customer-facing website
 └── frontend-admin/   # Admin dashboard (Next.js)
 ```
+
+See [API.md](API.md) for the backend API contract used by both frontends.
