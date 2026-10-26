@@ -13,9 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_valida
 DecimalNumber = Annotated[Decimal, PlainSerializer(float, return_type=float, when_used="json")]
 Money = Annotated[DecimalNumber, Field(ge=0, max_digits=10, decimal_places=2)]
 
-# Uploaded images live on S3/CloudFront (https). Plain http is accepted only for
-# a local emulator during development.
-_IMAGE_URL = re.compile(r"^(https://|http://(localhost|127\.0\.0\.1)(:\d+)?/)\S+$")
+# Uploaded images live on S3: https behind CloudFront, plain http on an S3
+# website endpoint (AWS Learner Lab) or a local emulator. Only web schemes, so
+# values like javascript: never reach an <img src>.
+_IMAGE_URL = re.compile(r"^https?://[^/\s]+/\S+$")
 
 
 class _Schema(BaseModel):
@@ -43,7 +44,7 @@ class ProductInput(_Schema):
         if not v:
             return None
         if not _IMAGE_URL.match(v):
-            raise ValueError("image_url must be an https:// URL")
+            raise ValueError("image_url must be an http:// or https:// URL")
         return v
 
 

@@ -29,6 +29,13 @@ PART_BYTES = 9 * 1024 * 1024
 
 LAMBDA_PYTHON = "3.12"  # keep in sync with Runtime in template.yaml
 LAMBDA_PLATFORM = "x86_64-manylinux_2_28"  # Amazon Linux 2023, x86_64
+# Left out of the Lambda package: the AWS SDK ships with the runtime, and the
+# uvicorn[standard] extras only speed up the local dev server (uvicorn itself
+# stays, backend/__init__.py imports it).
+LAMBDA_EXCLUDED = {
+    "boto3", "botocore", "s3transfer", "jmespath",
+    "uvloop", "httptools", "watchfiles", "websockets",
+}  # fmt: skip
 # The API Gateway URL only exists after the stack is created, so the sites are
 # built with this placeholder and deploy.sh swaps in the real URL.
 API_URL_PLACEHOLDER = "https://aof-api-placeholder.invalid/api"
@@ -67,6 +74,9 @@ def build_lambda() -> None:
         [uv, "export", "--frozen", "--no-dev", "--no-emit-project", "--no-hashes", "-o", str(requirements)],
         cwd=backend,
     )
+    lines = requirements.read_text(encoding="utf-8").splitlines()
+    kept = [line for line in lines if line.split("==")[0].strip().lower() not in LAMBDA_EXCLUDED]
+    requirements.write_text("\n".join(kept) + "\n", encoding="utf-8")
     run(
         [
             uv, "pip", "install",

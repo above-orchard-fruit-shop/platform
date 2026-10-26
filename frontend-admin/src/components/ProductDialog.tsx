@@ -50,9 +50,9 @@ function validate(f: Form): Errors {
   if (f.price === "" || !Number.isFinite(price) || price < 0) e.price = "ราคาต้องเป็นตัวเลข ≥ 0";
   const stock = Number(f.stock);
   if (f.stock === "" || !Number.isInteger(stock) || stock < 0) e.stock = "สต็อกต้องเป็นจำนวนเต็ม ≥ 0";
-  // http is allowed only for the local AWS emulator during development.
-  if (f.image_url && !/^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/)\S+$/.test(f.image_url))
-    e.image_url = "ต้องเป็นลิงก์ https://";
+  // Same rule as the backend: http (S3 website, local emulator) or https.
+  if (f.image_url && !/^https?:\/\/[^/\s]+\/\S+$/.test(f.image_url))
+    e.image_url = "ต้องเป็นลิงก์ http:// หรือ https://";
   return e;
 }
 
@@ -182,7 +182,7 @@ export default function ProductDialog({ product, categories, onClose, onSubmit }
               label="ลิงก์รูปภาพ (S3/CloudFront)"
               fullWidth
               {...field("image_url")}
-              placeholder="https://..."
+              placeholder="http(s)://..."
             />
             <FormControlLabel
               control={

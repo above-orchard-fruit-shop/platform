@@ -55,8 +55,12 @@ def test_product_validation(client: TestClient, admin: dict[str, str]) -> None:
     assert post(stock=-1) == 422
     assert post(name="") == 422
     assert post(image_url="javascript:alert(1)") == 422
-    assert post(image_url="http://evil.example.com/x.jpg") == 422
+    assert post(image_url="ftp://example.com/x.jpg") == 422
+    assert post(image_url="http://") == 422
     assert post(image_url="http://localhost:4566/bucket/products/x.jpg") == 201  # local emulator
+    # S3 website endpoints (AWS Learner Lab, no CloudFront) are http only.
+    s3_website = "http://shop.s3-website-us-east-1.amazonaws.com/images/products/x.jpg"
+    assert post(image_url=s3_website) == 201
     assert post(bogus=True) == 422
 
 
