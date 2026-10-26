@@ -30,7 +30,7 @@ export default function FruitImage({ product, height = 180, rounded = false }: P
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- remote bucket URLs vary per environment */}
       <img
-        src={src}
+        src={src} 
         alt={product.name}
         onError={() => {
           if (src !== FALLBACK_SRC) setFailedSrc(src);

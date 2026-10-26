@@ -16,6 +16,7 @@ import Typography from "@mui/material/Typography";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getOrder } from "@/lib/api";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import {
   formatDateTime,
   formatTHB,
@@ -31,7 +32,12 @@ const FLOW: OrderStatus[] = ["pending", "confirmed", "shipping", "completed"];
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
   const orderId = decodeURIComponent(id);
-  const { data: order, loading, error, reload } = useLoad(() => getOrder(orderId), orderId);
+  const {
+    data: order,
+    loading,
+    error,
+    reload,
+  } = useLoad(() => getOrder(orderId), orderId);
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -67,7 +73,11 @@ export default function OrderPage() {
               <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 เลขคำสั่งซื้อ
               </Typography>
-              <Typography variant="h5" component="h1" sx={{ fontFamily: "monospace" }}>
+              <Typography
+                variant="h5"
+                component="h1"
+                sx={{ fontFamily: "monospace" }}
+              >
                 {order.id}
               </Typography>
               <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -79,8 +89,35 @@ export default function OrderPage() {
                 label={ORDER_STATUS_LABEL[order.status]}
                 color={ORDER_STATUS_COLOR[order.status]}
               />
-              <Button size="small" onClick={reload} disabled={loading}>
-                รีเฟรช
+              <Button
+                size="small"
+                onClick={reload}
+                disabled={loading}
+                sx={{
+                  maxWidth:"20px",
+                  // 1. สร้าง Keyframes สำหรับแอนิเมชันตอนกำลังโหลด
+                  "@keyframes spin": {
+                    "0%": { transform: "rotate(0deg)" },
+                    "100%": { transform: "rotate(360deg)" },
+                  },
+
+                  // 2. ตั้งค่าความนุ่มนวลในการหมุนของไอคอนในสภาวะปกติ
+                  "& .MuiSvgIcon-root": {
+                    transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  },
+
+                  // 3. เมื่อเมาส์วาง (Hover) และไม่ได้อยู่ในสถานะโหลด ให้หมุน 30 องศา
+                  "&:hover:not(:disabled) .MuiSvgIcon-root": {
+                    transform: "rotate(60deg)",
+                  },
+
+                  // 4. เมื่อกำลังโหลด (Button จะ disabled) ให้ไอคอนหมุนวนไม่สิ้นสุดจนกว่าจะโหลดเสร็จ
+                  "&:disabled .MuiSvgIcon-root": {
+                    animation: loading ? "spin 1s linear infinite" : "none",
+                  },
+                }}
+              >
+                <RefreshIcon />
               </Button>
             </Stack>
           </Stack>
@@ -91,7 +128,10 @@ export default function OrderPage() {
             ) : (
               <Stepper activeStep={FLOW.indexOf(order.status)} alternativeLabel>
                 {FLOW.map((s) => (
-                  <Step key={s} completed={FLOW.indexOf(s) <= FLOW.indexOf(order.status)}>
+                  <Step
+                    key={s}
+                    completed={FLOW.indexOf(s) <= FLOW.indexOf(order.status)}
+                  >
                     <StepLabel>{ORDER_STATUS_LABEL[s]}</StepLabel>
                   </Step>
                 ))}
@@ -113,7 +153,9 @@ export default function OrderPage() {
                   <Typography>
                     {item.name} × {item.quantity} {item.unit}
                   </Typography>
-                  <Typography>{formatTHB(item.price * item.quantity)}</Typography>
+                  <Typography>
+                    {formatTHB(item.price * item.quantity)}
+                  </Typography>
                 </Stack>
               ))}
             </Stack>
@@ -130,19 +172,32 @@ export default function OrderPage() {
             <Typography variant="h6" sx={{ mb: 2 }}>
               ข้อมูลการจัดส่ง
             </Typography>
-            <Typography sx={{ fontWeight: 600 }}>{order.customer.name}</Typography>
+            <Typography sx={{ fontWeight: 600 }}>
+              {order.customer.name}
+            </Typography>
             <Typography>{order.customer.phone}</Typography>
-            {order.customer.email && <Typography>{order.customer.email}</Typography>}
-            <Typography sx={{ whiteSpace: "pre-line", mt: 1 }}>{order.customer.address}</Typography>
+            {order.customer.email && (
+              <Typography>{order.customer.email}</Typography>
+            )}
+            <Typography sx={{ whiteSpace: "pre-line", mt: 1 }}>
+              {order.customer.address}
+            </Typography>
             <Typography sx={{ mt: 2, color: "text.secondary" }}>
               ชำระเงิน: {PAYMENT_LABEL[order.payment_method]}
             </Typography>
             {order.note && (
-              <Typography sx={{ color: "text.secondary" }}>หมายเหตุ: {order.note}</Typography>
+              <Typography sx={{ color: "text.secondary" }}>
+                หมายเหตุ: {order.note}
+              </Typography>
             )}
           </Paper>
 
-          <Button component={Link} href="/" variant="outlined" sx={{ alignSelf: "flex-start" }}>
+          <Button
+            component={Link}
+            href="/"
+            variant="outlined"
+            sx={{ alignSelf: "flex-start" }}
+          >
             เลือกซื้อสินค้าต่อ
           </Button>
         </Stack>

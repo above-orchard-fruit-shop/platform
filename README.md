@@ -85,6 +85,39 @@ Shoppers browse freely but must sign up (`/register`) or sign in (`/login`) on t
 
 The emulator keeps data in memory: stopping it erases products, orders, customer accounts and uploaded images. Next.js reads `.env.local` only at startup, so restart `npm run dev` after changing it.
 
+### Run the full stack with Docker Compose
+
+Docker Compose starts Moto, the backend, the storefront, and the admin
+dashboard. Create `backend/.env` first by following the first-time setup above,
+then run these commands from the repository root:
+
+```powershell
+docker compose up --build
+```
+
+The services are available at:
+
+- Moto: `http://localhost:4566`
+- Backend API: `http://localhost:8000` (docs: `/docs`)
+- Storefront: `http://localhost:3000`
+- Admin dashboard: `http://localhost:3001`
+
+The Compose backend overrides `AWS_ENDPOINT_URL` with
+`http://moto:4566`, the Docker service name. This is necessary because
+`localhost` inside a container refers to that container itself. The backend
+automatically runs `aws-setup --seed --public-images` before starting the API.
+
+Stop the stack with the following command. Moto stores its data in memory, so
+the next start creates empty tables and the backend seeds the catalogue again:
+
+```powershell
+docker compose down
+```
+
+`NEXT_PUBLIC_API_URL` is embedded into each Next.js image during the build as
+`http://localhost:8000`, so rebuild the frontend images after changing the
+backend URL.
+
 ### Frontends only (no backend)
 
 Leave `NEXT_PUBLIC_API_URL` empty in `.env.local` and run just `npm run dev` in each frontend. Both apps then use mock data stored in the browser (admin login: `admin` / `admin1234`; storefront: sign up on `/register`, the account is kept in that browser). Each app keeps its own copy, so orders placed on the storefront don't show up in the admin dashboard, and image upload is disabled.
