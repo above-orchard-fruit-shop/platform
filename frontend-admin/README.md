@@ -4,12 +4,12 @@ Shop admin dashboard for Above Orchard Fruit Shop (ร้านผลไม้�
 
 ## Pages
 
-| Path | What it does |
-|---|---|
-| `/login` | Admin sign-in |
-| `/` | Dashboard: today's sales, pending orders, total sales, low-stock products, latest orders (click one to see it and change its status right there) |
-| `/products` | Product table: search, add, edit (price, stock, image, show/hide), delete |
-| `/orders` | Orders by status, search, view details, move status forward or cancel |
+| Path        | What it does                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/login`    | Admin sign-in                                                                                                                                    |
+| `/`         | Dashboard: today's sales, pending orders, total sales, low-stock products, latest orders (click one to see it and change its status right there) |
+| `/products` | Product table: search, add, edit (price, stock, image, show/hide), delete                                                                        |
+| `/orders`   | Orders by status, search, view details, move status forward or cancel                                                                            |
 
 Every page except `/login` requires a signed-in admin. The token is kept in `sessionStorage` and sent as `Authorization: Bearer …`. The backend must still check it on every `/admin/*` route.
 
