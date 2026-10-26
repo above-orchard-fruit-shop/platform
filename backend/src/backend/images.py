@@ -21,17 +21,26 @@ EXPIRES_IN_SECONDS = 300
 
 
 class ImageUploader:
-    def __init__(self, client: "S3Client", *, bucket: str, public_base_url: str, max_bytes: int) -> None:
+    def __init__(
+        self,
+        client: "S3Client",
+        *,
+        bucket: str,
+        public_base_url: str,
+        max_bytes: int,
+        key_prefix: str = "products/",
+    ) -> None:
         self._s3 = client
         self._bucket = bucket
         self._public_base_url = public_base_url
         self._max_bytes = max_bytes
+        self._key_prefix = key_prefix
 
     def presign(self, req: ImageUploadRequest) -> ImageUploadTicket:
         if req.size > self._max_bytes:
             raise PayloadTooLargeError(f"ไฟล์ใหญ่เกินไป (สูงสุด {self._max_bytes // (1024 * 1024)} MB)")
 
-        key = f"products/{uuid4().hex}.{EXTENSIONS[req.content_type]}"
+        key = f"{self._key_prefix}{uuid4().hex}.{EXTENSIONS[req.content_type]}"
         # Signing is local (no network call), so it is fine to run on the event loop.
         post = self._s3.generate_presigned_post(
             Bucket=self._bucket,

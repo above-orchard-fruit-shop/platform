@@ -12,6 +12,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cartActions } from "@/lib/cart";
 import { formatTHB } from "@/lib/format";
+import { productHref } from "@/lib/routes";
 import { loginHref, useAuth } from "@/lib/session";
 import type { Product } from "@/lib/types";
 import FruitImage from "./FruitImage";
@@ -28,7 +29,7 @@ export default function ProductCard({ product }: { product: Product }) {
 
   return (
     <Card sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <CardActionArea component={Link} href={`/products/${product.id}`}>
+      <CardActionArea component={Link} href={productHref(product.id)}>
         <FruitImage product={product} height={160} />
         <CardContent sx={{ pb: 1 }}>
           <Typography variant="caption" sx={{ color: "text.secondary" }}>

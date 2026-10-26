@@ -26,7 +26,8 @@ import type { CustomerAccount } from "@/lib/types";
 
 export default function SiteHeader() {
   const auth = useAuth();
-  const pathname = usePathname();
+  // The static export uses trailing slashes (/login/); compare without them.
+  const pathname = usePathname().replace(/(.)\/$/, "$1");
   // On the login/sign-up pages the button would only drop their ?next= target.
   const onAuthPage = pathname === "/login" || pathname === "/register";
 

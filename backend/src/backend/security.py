@@ -28,9 +28,14 @@ class TokenService:
         configured = settings.jwt_secret.get_secret_value() if settings.jwt_secret else ""
         self._secret = configured or secrets.token_urlsafe(32)
 
+    @property
+    def settings(self) -> Settings:
+        return self._settings
+
     def check_admin_credentials(self, username: str, password: str) -> bool:
         expected = self._settings.admin_password
-        if expected is None:
+        # With Cognito, admins sign in there; local password login stays off.
+        if expected is None or self._settings.admin_auth == "cognito":
             return False
         # compare_digest avoids leaking how many characters matched via timing.
         user_ok = hmac.compare_digest(username.encode(), self._settings.admin_username.encode())
@@ -78,7 +83,38 @@ def _unauthorized(detail: str) -> HTTPException:
     )
 
 
-def require_admin(tokens: TokenServiceDep, credentials: BearerDep) -> str:
+def _gateway_claims(request: Request) -> dict[str, Any] | None:
+    """JWT claims API Gateway already verified (HTTP API JWT authorizer), via Mangum's scope."""
+    event = request.scope.get("aws.event")
+    if not isinstance(event, dict):
+        return None
+    try:
+        claims = event["requestContext"]["authorizer"]["jwt"]["claims"]
+    except (KeyError, TypeError):
+        return None
+    return claims if isinstance(claims, dict) else None
+
+
+def _claim_groups(value: object) -> set[str]:
+    """`cognito:groups` arrives as a list, or as a string like "[admin editors]" from HTTP API."""
+    if isinstance(value, list):
+        return {str(v) for v in value}
+    if isinstance(value, str):
+        return {g for g in value.strip("[]").replace(",", " ").split() if g}
+    return set()
+
+
+def require_admin(request: Request, tokens: TokenServiceDep, credentials: BearerDep) -> str:
+    settings = tokens.settings
+    if settings.admin_auth == "cognito":
+        # The signature was checked by API Gateway; a request that bypassed the
+        # authorizer (e.g. a route without it) has no claims and is refused here.
+        gw_claims = _gateway_claims(request)
+        if gw_claims is None or settings.admin_group not in _claim_groups(gw_claims.get("cognito:groups")):
+            raise _unauthorized("กรุณาเข้าสู่ระบบผู้ดูแล")
+        username = gw_claims.get("cognito:username") or gw_claims.get("sub")
+        return str(username)
+
     claims = tokens.verify(credentials.credentials, "admin") if credentials else None
     if claims is None:
         raise _unauthorized("กรุณาเข้าสู่ระบบผู้ดูแล")

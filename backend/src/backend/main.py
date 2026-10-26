@@ -32,7 +32,7 @@ def create_app(
     images: ImageUploader | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
-    if settings.admin_password is None:
+    if settings.admin_auth == "local" and settings.admin_password is None:
         logger.warning("ADMIN_PASSWORD is not set: admin login is disabled")
     if settings.jwt_secret is None:
         logger.warning("JWT_SECRET is not set: using a random secret, admin tokens reset on restart")
@@ -44,6 +44,7 @@ def create_app(
         bucket=settings.images_bucket,
         public_base_url=settings.images_base_url,
         max_bytes=settings.max_image_bytes,
+        key_prefix=settings.images_key_prefix,
     )
     app.state.tokens = TokenService(settings)
 

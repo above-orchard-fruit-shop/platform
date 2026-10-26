@@ -11,19 +11,29 @@ import Skeleton from "@mui/material/Skeleton";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import FruitImage from "@/components/FruitImage";
 import QuantityStepper from "@/components/QuantityStepper";
 import { useToast } from "@/components/Toast";
 import { getProduct } from "@/lib/api";
 import { cartActions, useCart } from "@/lib/cart";
 import { formatTHB } from "@/lib/format";
+import { productHref } from "@/lib/routes";
 import { loginHref, useAuth } from "@/lib/session";
 import { useLoad } from "@/lib/use-load";
 
+// useSearchParams needs a Suspense boundary when the page is exported statically.
 export default function ProductPage() {
-  const { id } = useParams<{ id: string }>();
+  return (
+    <Suspense>
+      <ProductDetail />
+    </Suspense>
+  );
+}
+
+function ProductDetail() {
+  const id = useSearchParams().get("id") ?? "";
   const { data: product, loading, error } = useLoad(() => getProduct(id), id);
   const { items } = useCart();
   const toast = useToast();
@@ -91,7 +101,7 @@ export default function ProductPage() {
                   startIcon={<AddShoppingCartIcon />}
                   onClick={() => {
                     if (auth.status !== "signed-in") {
-                      router.push(loginHref(`/products/${id}`));
+                      router.push(loginHref(productHref(id)));
                       return;
                     }
                     const qty = Math.min(quantity, available);

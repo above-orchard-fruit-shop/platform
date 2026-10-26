@@ -14,7 +14,8 @@ import StepLabel from "@mui/material/StepLabel";
 import Stepper from "@mui/material/Stepper";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { getOrder } from "@/lib/api";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import {
@@ -29,9 +30,17 @@ import { useLoad } from "@/lib/use-load";
 
 const FLOW: OrderStatus[] = ["pending", "confirmed", "shipping", "completed"];
 
+// useSearchParams needs a Suspense boundary when the page is exported statically.
 export default function OrderPage() {
-  const { id } = useParams<{ id: string }>();
-  const orderId = decodeURIComponent(id);
+  return (
+    <Suspense>
+      <OrderDetail />
+    </Suspense>
+  );
+}
+
+function OrderDetail() {
+  const orderId = useSearchParams().get("id") ?? "";
   const {
     data: order,
     loading,

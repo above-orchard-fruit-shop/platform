@@ -1,0 +1,343 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Above Orchard Fruit Shop (ร้านผลไม้เบื้องบน) - serverless stack with VPC.
+  S3 static website hosting serves the storefront (/), admin (/admin/) and product
+  photos (images/); the sites call API Gateway -> Lambda in two private subnets.
+  Lambda reaches DynamoDB and S3 only through VPC gateway endpoints (no NAT).
+  Admins sign in with Cognito; API Gateway verifies their JWT.
+  Built for AWS Academy Learner Lab: no IAM resources, Lambda uses the existing
+  LabRole. CloudFront and WAF from the diagram are left out because Learner Lab
+  denies creating CloudFront distributions.
+
+Parameters:
+  CodeBucket:
+    Type: String
+    Description: S3 bucket holding the Lambda deployment package (created by deploy.sh).
+  CodeKey:
+    Type: String
+    Description: Object key of the Lambda zip (content hash, so a new upload updates the function).
+  LambdaRoleName:
+    Type: String
+    Default: LabRole
+    Description: Existing IAM role for the function (Learner Lab cannot create roles).
+
+Resources:
+  # ---------------------------------------------------------------------------
+  # Network: VPC 10.0.0.0/16, private subnets in two AZs, gateway endpoints
+  # ---------------------------------------------------------------------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-vpc" }]
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-private-a" }]
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-private-b" }]
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-private" }]
+
+  PrivateSubnetARouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      VpcEndpointType: Gateway
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      RouteTableIds: [!Ref PrivateRouteTable]
+
+  DynamoDbGatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      VpcEndpointType: Gateway
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      RouteTableIds: [!Ref PrivateRouteTable]
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: API Lambda - outbound HTTPS only (reachable targets are the gateway endpoints)
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  # ---------------------------------------------------------------------------
+  # Data: DynamoDB tables and the website bucket (sites at the root, photos in images/)
+  # ---------------------------------------------------------------------------
+  ProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: id, AttributeType: S }]
+      KeySchema: [{ AttributeName: id, KeyType: HASH }]
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: id, AttributeType: S }]
+      KeySchema: [{ AttributeName: id, KeyType: HASH }]
+
+  CustomersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: email, AttributeType: S }]
+      KeySchema: [{ AttributeName: email, KeyType: HASH }]
+
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      # Website hosting needs a public-read bucket policy; ACLs stay blocked.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      # The website endpoint maps /cart/ to cart/index.html (and redirects /cart).
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: 404.html
+      # The admin dashboard uploads photos straight to S3 with a presigned POST;
+      # the signed policy pins the key, type and size.
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [POST]
+            AllowedOrigins: ["*"]
+            AllowedHeaders: ["*"]
+            MaxAge: 3000
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadWebsite
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${SiteBucket.Arn}/*"
+
+  # Signing key for customer tokens (customers are not in Cognito).
+  CustomerJwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: !Sub "${AWS::StackName} customer JWT signing secret"
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+
+  # ---------------------------------------------------------------------------
+  # Admin sign-in: Cognito user pool with an "admin" group
+  # ---------------------------------------------------------------------------
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${AWS::StackName}-admins"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      UsernameConfiguration:
+        CaseSensitive: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: admin-dashboard
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_PASSWORD_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
+      PreventUserExistenceErrors: ENABLED
+      IdTokenValidity: 8
+      AccessTokenValidity: 8
+      TokenValidityUnits: { IdToken: hours, AccessToken: hours }
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref UserPool
+      GroupName: admin
+      Description: Shop staff allowed to use /api/admin/*
+
+  # ---------------------------------------------------------------------------
+  # Compute: one Lambda function spread over both private subnets
+  # ---------------------------------------------------------------------------
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    # The function only reaches DynamoDB/S3 through the endpoints, so they must exist first.
+    DependsOn: [S3GatewayEndpoint, DynamoDbGatewayEndpoint, PrivateSubnetARouteTable, PrivateSubnetBRouteTable]
+    Properties:
+      Description: Fruit shop API (FastAPI via Mangum) - products, orders, admin
+      Runtime: python3.12
+      Architectures: [x86_64]
+      Handler: backend.lambda_handler.handler
+      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/${LambdaRoleName}"
+      Code:
+        S3Bucket: !Ref CodeBucket
+        S3Key: !Ref CodeKey
+      MemorySize: 1024
+      Timeout: 20
+      VpcConfig:
+        SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+        SecurityGroupIds: [!Ref LambdaSecurityGroup]
+      Environment:
+        Variables:
+          STORE: dynamodb
+          PRODUCTS_TABLE: !Ref ProductsTable
+          ORDERS_TABLE: !Ref OrdersTable
+          CUSTOMERS_TABLE: !Ref CustomersTable
+          IMAGES_BUCKET: !Ref SiteBucket
+          IMAGES_KEY_PREFIX: images/products/
+          IMAGES_PUBLIC_BASE_URL: !GetAtt SiteBucket.WebsiteURL
+          ADMIN_AUTH: cognito
+          ADMIN_GROUP: !Ref AdminGroup
+          JWT_SECRET: !Sub "{{resolve:secretsmanager:${CustomerJwtSecret}:SecretString}}"
+          CORS_ORIGINS: !Sub '["${SiteBucket.WebsiteURL}"]'
+
+  ApiFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ApiFunction}"
+      RetentionInDays: 14
+
+  # ---------------------------------------------------------------------------
+  # API Gateway (HTTP API): /api/admin/* needs a Cognito JWT, the rest is public
+  # ---------------------------------------------------------------------------
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-api"
+      ProtocolType: HTTP
+      # The sites live on the S3 website origin; API Gateway answers preflights.
+      CorsConfiguration:
+        AllowOrigins: [!GetAtt SiteBucket.WebsiteURL]
+        AllowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        AllowHeaders: [content-type, authorization]
+        MaxAge: 600
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ApiFunction.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 25000
+
+  AdminAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      Name: cognito-admin
+      AuthorizerType: JWT
+      IdentitySource: ["$request.header.Authorization"]
+      JwtConfiguration:
+        Audience: [!Ref UserPoolClient]
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+
+  PublicRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: ANY /api/{proxy+}
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  # More specific than /api/{proxy+}, so every admin call goes through the authorizer.
+  # The backend also refuses /admin/* without the admin group claim.
+  AdminRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: ANY /api/admin/{proxy+}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref AdminAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  # CORS preflights carry no token, so without this route they hit the JWT
+  # authorizer above and get 401, and the browser blocks every admin call.
+  AdminPreflightRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: OPTIONS /api/admin/{proxy+}
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+
+  ApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
+
+Outputs:
+  SiteUrl:
+    Description: Storefront (admin dashboard at /admin/)
+    Value: !GetAtt SiteBucket.WebsiteURL
+  ApiUrl:
+    Description: Base URL the sites call
+    Value: !Sub "${HttpApi.ApiEndpoint}/api"
+  SiteBucketName:
+    Value: !Ref SiteBucket
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+  ApiFunctionName:
+    Value: !Ref ApiFunction

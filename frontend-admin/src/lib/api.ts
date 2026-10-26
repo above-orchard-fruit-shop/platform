@@ -1,4 +1,5 @@
 import { getToken, setToken } from "./auth";
+import { CognitoError, cognitoSignIn, loadCognitoConfig } from "./cognito";
 import { SEED_PRODUCTS } from "./mock-data";
 import type { Order, OrderStatus, Product } from "./types";
 
@@ -79,6 +80,16 @@ export async function login(username: string, password: string): Promise<void> {
       throw new ApiError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", 401);
     }
     setToken("mock-admin-token");
+    return;
+  }
+  const cognito = await loadCognitoConfig();
+  if (cognito) {
+    try {
+      setToken(await cognitoSignIn(cognito, username, password));
+    } catch (err) {
+      if (err instanceof CognitoError) throw new ApiError(err.message, err.status);
+      throw err;
+    }
     return;
   }
   const res = await request<{ access_token: string }>("/auth/login", {

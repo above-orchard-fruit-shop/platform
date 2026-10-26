@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { Fragment, useState } from "react";
 import { listMyOrders } from "@/lib/api";
 import { formatDateTime, formatTHB, ORDER_STATUS_COLOR, ORDER_STATUS_LABEL } from "@/lib/format";
+import { orderHref } from "@/lib/routes";
 import { loginHref, useAuth } from "@/lib/session";
 import type { CustomerSession, Order } from "@/lib/types";
 import { useLoad } from "@/lib/use-load";
@@ -67,7 +68,7 @@ function LookupByNumber() {
         onSubmit={(e) => {
           e.preventDefault();
           const id = orderId.trim();
-          if (id) router.push(`/orders/${encodeURIComponent(id)}`);
+          if (id) router.push(orderHref(id));
         }}
       >
         <TextField
@@ -150,7 +151,7 @@ function OrderRow({ order }: { order: Order }) {
   return (
     <Box
       component={Link}
-      href={`/orders/${encodeURIComponent(order.id)}`}
+      href={orderHref(order.id)}
       sx={{
         display: "flex",
         alignItems: "center",

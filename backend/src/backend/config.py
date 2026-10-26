@@ -30,8 +30,17 @@ class Settings(BaseSettings):
     # Defaults to the bucket's own URL.
     images_public_base_url: str | None = None
     max_image_bytes: int = 5 * 1024 * 1024
+    # Object key prefix for uploaded product photos. On AWS the bucket also holds
+    # the static sites under web/, so photos live under images/.
+    images_key_prefix: str = "products/"
 
     cors_origins: list[str] = Field(default=["http://localhost:3000", "http://localhost:3001"])
+
+    # "local": POST /auth/login with ADMIN_PASSWORD issues our own JWT.
+    # "cognito": API Gateway verifies a Cognito JWT; the API only checks its claims.
+    admin_auth: Literal["local", "cognito"] = "local"
+    # Cognito group whose members may use /admin/*.
+    admin_group: str = "admin"
 
     admin_username: str = "admin"
     # No default: admin login is refused until a password is configured.

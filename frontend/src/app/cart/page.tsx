@@ -15,6 +15,7 @@ import FruitImage from "@/components/FruitImage";
 import QuantityStepper from "@/components/QuantityStepper";
 import { useCart } from "@/lib/cart";
 import { formatTHB } from "@/lib/format";
+import { productHref } from "@/lib/routes";
 import { useRequireCustomer } from "@/lib/session";
 
 export default function CartPage() {
@@ -59,7 +60,7 @@ export default function CartPage() {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     component={Link}
-                    href={`/products/${line.product.id}`}
+                    href={productHref(line.product.id)}
                     sx={{ fontWeight: 600, display: "block" }}
                     noWrap
                   >

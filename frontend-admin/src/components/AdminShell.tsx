@@ -42,7 +42,8 @@ function FullPageSpinner() {
 /** Auth gate + layout (sidebar and top bar) for every admin page except /login. */
 export default function AdminShell({ children }: { children: ReactNode }) {
   const token = useToken();
-  const pathname = usePathname();
+  // The static export uses trailing slashes (/login/); compare without them.
+  const pathname = usePathname().replace(/(.)\/$/, "$1");
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isLoginPage = pathname === "/login";

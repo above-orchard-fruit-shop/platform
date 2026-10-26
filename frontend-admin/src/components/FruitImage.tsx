@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { Product } from "@/lib/types";
 
 /** Shown when a product has no image_url, or its image fails to load. */
-const FALLBACK_SRC = "/notfound.png";
+const FALLBACK_SRC = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/notfound.png`;
 
 type Props = {
   product: Pick<Product, "name" | "image_url">;

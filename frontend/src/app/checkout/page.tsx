@@ -20,6 +20,7 @@ import { PageSpinner } from "@/components/AuthCard";
 import { createOrder, errorMessage } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { formatTHB, PAYMENT_LABEL } from "@/lib/format";
+import { orderHref } from "@/lib/routes";
 import { useRequireCustomer } from "@/lib/session";
 import type { CustomerAccount, PaymentMethod } from "@/lib/types";
 
@@ -100,7 +101,7 @@ function CheckoutForm({ customer }: { customer: CustomerAccount }) {
         note: form.note.trim() || undefined,
       });
       clear();
-      router.push(`/orders/${encodeURIComponent(order.id)}`);
+      router.push(orderHref(order.id));
     } catch (err) {
       setSubmitError(errorMessage(err));
       setSubmitting(false);
